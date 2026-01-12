@@ -28,6 +28,7 @@ export function useParkingSystem() {
   });
   const [alerts, setAlerts] = useState<string[]>([]);
   const [lastANPRResult, setLastANPRResult] = useState<ANPRResult | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   const occupiedCount = slots.filter(s => s.status === 'occupied').length;
   const availableCount = config.totalCapacity - occupiedCount;
@@ -130,7 +131,7 @@ export function useParkingSystem() {
     }
   }, [slots, occupiedCount, config.totalCapacity, addLogEntry, lastANPRResult]);
 
-  const simulateANPR = useCallback((imageUrl?: string): ANPRResult => {
+  const simulateANPR = useCallback(async (imageUrl?: string): Promise<ANPRResult> => {
     // If at capacity, return FULL instead of plate number
     if (occupiedCount >= config.totalCapacity) {
       const result: ANPRResult = {
@@ -144,15 +145,36 @@ export function useParkingSystem() {
       return result;
     }
     
+    const plateNumber = generateVehicleNumber();
     const result: ANPRResult = {
-      plateNumber: generateVehicleNumber(),
+      plateNumber,
       confidence: Math.random() * 20 + 80, // 80-100%
       timestamp: new Date().toISOString(),
       imageUrl,
     };
     setLastANPRResult(result);
+    
+    // Auto-assign to first available slot
+    const availableSlot = slots.find(s => s.status === 'available');
+    if (availableSlot) {
+      setSlots(prev => prev.map(s => 
+        s.id === availableSlot.id 
+          ? { ...s, status: 'occupied', vehicleNumber: plateNumber, entryTime: new Date().toISOString() }
+          : s
+      ));
+      await addLogEntry(availableSlot.id, plateNumber, 'entry', availableSlot.contractorId || undefined);
+    }
+    
     return result;
-  }, [occupiedCount, config.totalCapacity]);
+  }, [occupiedCount, config.totalCapacity, slots, addLogEntry]);
+
+  const startScanning = useCallback(() => {
+    setIsScanning(true);
+  }, []);
+
+  const stopScanning = useCallback(() => {
+    setIsScanning(false);
+  }, []);
 
   const setCapacity = useCallback((capacity: number) => {
     setConfig(prev => ({ ...prev, totalCapacity: Math.max(1, Math.min(capacity, INITIAL_SLOTS)) }));
@@ -206,8 +228,11 @@ export function useParkingSystem() {
     occupiedCount,
     availableCount,
     violationCount,
+    isScanning,
     toggleSlot,
     simulateANPR,
+    startScanning,
+    stopScanning,
     setCapacity,
     toggleDemoMode,
     resetLogs,
