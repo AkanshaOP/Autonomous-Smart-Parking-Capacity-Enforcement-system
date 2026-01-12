@@ -61,6 +61,7 @@ const Index = () => {
             <ANPRPanel 
               onSimulateANPR={simulateANPR}
               lastResult={lastANPRResult}
+              gateStatus={config.gateStatus}
             />
           </div>
 
