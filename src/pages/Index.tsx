@@ -22,8 +22,11 @@ const Index = () => {
     occupiedCount,
     availableCount,
     violationCount,
+    isScanning,
     toggleSlot,
     simulateANPR,
+    startScanning,
+    stopScanning,
     setCapacity,
     toggleDemoMode,
     resetLogs,
@@ -56,12 +59,15 @@ const Index = () => {
               slots={slots} 
               onToggleSlot={toggleSlot}
               demoMode={config.demoMode}
+              isScanning={isScanning}
             />
             
             <ANPRPanel 
               onSimulateANPR={simulateANPR}
               lastResult={lastANPRResult}
               gateStatus={config.gateStatus}
+              onScanStart={startScanning}
+              onScanEnd={stopScanning}
             />
           </div>
 

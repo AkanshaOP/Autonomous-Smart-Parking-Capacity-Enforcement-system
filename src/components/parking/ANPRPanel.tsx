@@ -5,13 +5,15 @@ import { ANPRResult } from '@/types/parking';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ANPRPanelProps {
-  onSimulateANPR: (imageUrl?: string) => ANPRResult;
+  onSimulateANPR: (imageUrl?: string) => Promise<ANPRResult>;
   lastResult: ANPRResult | null;
   isFull?: boolean;
   gateStatus: 'open' | 'locked';
+  onScanStart?: () => void;
+  onScanEnd?: () => void;
 }
 
-export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus }: ANPRPanelProps) {
+export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus, onScanStart, onScanEnd }: ANPRPanelProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState<'idle' | 'detecting' | 'reading' | 'complete'>('idle');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -19,26 +21,25 @@ export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus }: AN
   
   const isFullResult = lastResult?.plateNumber === 'FULL';
 
-  const handleScan = () => {
+  const handleScan = async () => {
     setIsScanning(true);
     setScanPhase('detecting');
+    onScanStart?.();
     
     // Phase 1: Detecting vehicle
-    setTimeout(() => {
-      setScanPhase('reading');
-    }, 1000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setScanPhase('reading');
     
     // Phase 2: Reading plate
-    setTimeout(() => {
-      setScanPhase('complete');
-      onSimulateANPR(uploadedImage || undefined);
-    }, 2000);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setScanPhase('complete');
+    await onSimulateANPR(uploadedImage || undefined);
     
-    // Reset
-    setTimeout(() => {
-      setIsScanning(false);
-      setScanPhase('idle');
-    }, 3500);
+    // Reset after showing result
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setIsScanning(false);
+    setScanPhase('idle');
+    onScanEnd?.();
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
