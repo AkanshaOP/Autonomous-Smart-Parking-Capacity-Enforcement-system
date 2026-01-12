@@ -2,11 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import { ParkingSlot, LogEntry, Contractor, SystemConfig, ANPRResult } from '@/types/parking';
 import { generateHash, generateSlotId, generateVehicleNumber } from '@/utils/hashUtils';
 
-const INITIAL_SLOTS = 20;
+const INITIAL_SLOTS = 4;
 const CONTRACTORS: Contractor[] = [
-  { id: 'CTR001', name: 'Metro Parking Co.', allowedCapacity: 8, currentOccupancy: 0, violations: 0 },
-  { id: 'CTR002', name: 'City Park Services', allowedCapacity: 6, currentOccupancy: 0, violations: 0 },
-  { id: 'CTR003', name: 'Urban Lot Mgmt', allowedCapacity: 6, currentOccupancy: 0, violations: 0 },
+  { id: 'CTR001', name: 'Metro Parking Co.', allowedCapacity: 2, currentOccupancy: 0, violations: 0 },
+  { id: 'CTR002', name: 'City Park Services', allowedCapacity: 2, currentOccupancy: 0, violations: 0 },
 ];
 
 export function useParkingSystem() {
@@ -23,7 +22,7 @@ export function useParkingSystem() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [contractors, setContractors] = useState<Contractor[]>(CONTRACTORS);
   const [config, setConfig] = useState<SystemConfig>({
-    totalCapacity: 15, // Less than total slots to demonstrate enforcement
+    totalCapacity: 4, // Matches total slots
     demoMode: true,
     gateStatus: 'open',
   });
@@ -132,6 +131,19 @@ export function useParkingSystem() {
   }, [slots, occupiedCount, config.totalCapacity, addLogEntry, lastANPRResult]);
 
   const simulateANPR = useCallback((imageUrl?: string): ANPRResult => {
+    // If at capacity, return FULL instead of plate number
+    if (occupiedCount >= config.totalCapacity) {
+      const result: ANPRResult = {
+        plateNumber: 'FULL',
+        confidence: 100,
+        timestamp: new Date().toISOString(),
+        imageUrl,
+      };
+      setLastANPRResult(result);
+      setAlerts(prev => [...prev, 'PARKING FULL: No spaces available. Entry denied.']);
+      return result;
+    }
+    
     const result: ANPRResult = {
       plateNumber: generateVehicleNumber(),
       confidence: Math.random() * 20 + 80, // 80-100%
@@ -140,7 +152,7 @@ export function useParkingSystem() {
     };
     setLastANPRResult(result);
     return result;
-  }, []);
+  }, [occupiedCount, config.totalCapacity]);
 
   const setCapacity = useCallback((capacity: number) => {
     setConfig(prev => ({ ...prev, totalCapacity: Math.max(1, Math.min(capacity, INITIAL_SLOTS)) }));

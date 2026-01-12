@@ -6,12 +6,15 @@ import { ANPRResult } from '@/types/parking';
 interface ANPRPanelProps {
   onSimulateANPR: (imageUrl?: string) => ANPRResult;
   lastResult: ANPRResult | null;
+  isFull?: boolean;
 }
 
-export function ANPRPanel({ onSimulateANPR, lastResult }: ANPRPanelProps) {
+export function ANPRPanel({ onSimulateANPR, lastResult, isFull }: ANPRPanelProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const isFullResult = lastResult?.plateNumber === 'FULL';
 
   const handleScan = () => {
     setIsScanning(true);
@@ -98,26 +101,44 @@ export function ANPRPanel({ onSimulateANPR, lastResult }: ANPRPanelProps) {
             {lastResult ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-success" />
-                  <span className="text-sm text-success">Plate Detected</span>
+                  {isFullResult ? (
+                    <>
+                      <div className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center">
+                        <span className="text-xs font-bold text-white">!</span>
+                      </div>
+                      <span className="text-sm text-destructive font-semibold">Parking Full</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5 text-success" />
+                      <span className="text-sm text-success">Plate Detected</span>
+                    </>
+                  )}
                 </div>
-                <div className="bg-background rounded-lg p-3 border border-primary/30">
-                  <p className="text-2xl font-mono font-bold text-primary tracking-wider">
+                <div className={`rounded-lg p-3 border ${isFullResult ? 'bg-destructive/20 border-destructive' : 'bg-background border-primary/30'}`}>
+                  <p className={`text-2xl font-mono font-bold tracking-wider ${isFullResult ? 'text-destructive' : 'text-primary'}`}>
                     {lastResult.plateNumber}
                   </p>
+                  {isFullResult && (
+                    <p className="text-sm text-destructive mt-1">No spaces available</p>
+                  )}
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Confidence:</span>
-                  <span className={lastResult.confidence > 90 ? 'text-success' : 'text-warning'}>
-                    {lastResult.confidence.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Scanned:</span>
-                  <span className="font-mono text-xs">
-                    {new Date(lastResult.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
+                {!isFullResult && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Confidence:</span>
+                      <span className={lastResult.confidence > 90 ? 'text-success' : 'text-warning'}>
+                        {lastResult.confidence.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Scanned:</span>
+                      <span className="font-mono text-xs">
+                        {new Date(lastResult.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
