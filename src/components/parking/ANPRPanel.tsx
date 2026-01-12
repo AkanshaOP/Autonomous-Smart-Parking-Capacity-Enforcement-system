@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Camera, Upload, ScanLine, CheckCircle, DoorOpen, DoorClosed, Car } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, ScanLine, CheckCircle, DoorOpen, DoorClosed, Car, Power, PowerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ANPRResult } from '@/types/parking';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,29 +17,66 @@ export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus, onSc
   const [isScanning, setIsScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState<'idle' | 'detecting' | 'reading' | 'complete'>('idle');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const isFullResult = lastResult?.plateNumber === 'FULL';
 
-  const handleScan = async () => {
+  // Auto-scan functionality - simulates IoT device
+  useEffect(() => {
+    if (autoScanEnabled && cameraOn && !isScanning) {
+      autoScanTimerRef.current = setTimeout(() => {
+        handleAutoScan();
+      }, 4000); // Scan every 4 seconds
+    }
+    
+    return () => {
+      if (autoScanTimerRef.current) {
+        clearTimeout(autoScanTimerRef.current);
+      }
+    };
+  }, [autoScanEnabled, cameraOn, isScanning, lastResult]);
+
+  const handleAutoScan = async () => {
+    if (isScanning) return;
+    
     setIsScanning(true);
     setScanPhase('detecting');
     onScanStart?.();
     
     // Phase 1: Detecting vehicle
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     setScanPhase('reading');
     
     // Phase 2: Reading plate
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     setScanPhase('complete');
     await onSimulateANPR(uploadedImage || undefined);
     
     // Reset after showing result
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     setIsScanning(false);
     setScanPhase('idle');
     onScanEnd?.();
+  };
+
+  const toggleCamera = () => {
+    if (cameraOn) {
+      // Turn off camera
+      setCameraOn(false);
+      setAutoScanEnabled(false);
+      setScanPhase('idle');
+      setIsScanning(false);
+      if (autoScanTimerRef.current) {
+        clearTimeout(autoScanTimerRef.current);
+      }
+    } else {
+      // Turn on camera and start auto-scanning
+      setCameraOn(true);
+      setAutoScanEnabled(true);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,115 +95,142 @@ export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus, onSc
       <h3 className="section-title">
         <Camera className="w-5 h-5 text-primary" />
         ANPR Vehicle Recognition
+        <span className={`ml-auto text-xs px-2 py-1 rounded-full ${autoScanEnabled ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'}`}>
+          {autoScanEnabled ? 'AUTO MODE' : 'MANUAL'}
+        </span>
       </h3>
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-4">
           {/* Camera View */}
           <div 
-            className="relative aspect-video bg-black rounded-lg overflow-hidden border-2 border-border flex items-center justify-center"
+            className={`relative aspect-video rounded-lg overflow-hidden border-2 flex items-center justify-center transition-all duration-500 ${
+              cameraOn ? 'bg-black border-primary' : 'bg-muted border-border'
+            }`}
           >
-            {/* Camera feed simulation */}
-            <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black">
-              {/* Grid overlay */}
-              <div className="absolute inset-0 opacity-20" style={{
-                backgroundImage: 'linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px)',
-                backgroundSize: '20px 20px'
-              }} />
-              
-              {/* Camera label */}
-              <div className="absolute top-2 left-2 flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isScanning ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
-                <span className="text-xs text-green-400 font-mono">CAM-01 LIVE</span>
-              </div>
-              
-              {/* Timestamp */}
-              <div className="absolute top-2 right-2">
-                <span className="text-xs text-green-400 font-mono">
-                  {new Date().toLocaleTimeString()}
-                </span>
-              </div>
-              
-              {/* Car visualization */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <AnimatePresence mode="wait">
-                  {scanPhase === 'idle' && !lastResult && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="text-center"
-                    >
-                      <Car className="w-16 h-16 text-muted-foreground/30 mx-auto" />
-                      <p className="text-xs text-muted-foreground mt-2">Waiting for vehicle...</p>
-                    </motion.div>
-                  )}
+            {cameraOn ? (
+              <>
+                {/* Camera feed simulation */}
+                <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black">
+                  {/* Grid overlay */}
+                  <div className="absolute inset-0 opacity-20" style={{
+                    backgroundImage: 'linear-gradient(rgba(0,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.1) 1px, transparent 1px)',
+                    backgroundSize: '20px 20px'
+                  }} />
                   
-                  {scanPhase === 'detecting' && (
-                    <motion.div
-                      initial={{ x: -100, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      className="text-center"
-                    >
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ repeat: Infinity, duration: 0.5 }}
-                      >
-                        <Car className="w-20 h-20 text-primary mx-auto" />
-                      </motion.div>
-                      <p className="text-sm text-primary mt-2 font-semibold">Vehicle Detected!</p>
-                    </motion.div>
-                  )}
+                  {/* Camera label */}
+                  <div className="absolute top-2 left-2 flex items-center gap-2">
+                    <motion.div 
+                      className="w-2 h-2 rounded-full bg-red-500"
+                      animate={{ opacity: [1, 0.3, 1] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                    />
+                    <span className="text-xs text-green-400 font-mono">CAM-01 LIVE</span>
+                    {autoScanEnabled && (
+                      <span className="text-xs text-primary font-mono ml-2">● AUTO</span>
+                    )}
+                  </div>
                   
-                  {scanPhase === 'reading' && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center"
-                    >
-                      <Car className="w-20 h-20 text-primary mx-auto" />
-                      {/* Scanning line effect */}
-                      <motion.div
-                        className="absolute left-1/4 right-1/4 h-1 bg-primary/80"
-                        animate={{ top: ['40%', '60%', '40%'] }}
-                        transition={{ repeat: Infinity, duration: 0.8 }}
-                        style={{ boxShadow: '0 0 20px 5px hsl(var(--primary))' }}
-                      />
-                      <p className="text-sm text-primary mt-2 font-semibold animate-pulse">Reading Plate...</p>
-                    </motion.div>
-                  )}
+                  {/* Timestamp */}
+                  <div className="absolute top-2 right-2">
+                    <span className="text-xs text-green-400 font-mono">
+                      {new Date().toLocaleTimeString()}
+                    </span>
+                  </div>
                   
-                  {(scanPhase === 'complete' || (scanPhase === 'idle' && lastResult)) && (
-                    <motion.div
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="text-center"
-                    >
-                      <Car className={`w-20 h-20 mx-auto ${isFullResult ? 'text-destructive' : 'text-success'}`} />
-                      {/* Plate display on camera */}
-                      <motion.div 
-                        className={`mt-2 px-4 py-1 rounded border-2 ${isFullResult ? 'border-destructive bg-destructive/20' : 'border-success bg-success/20'}`}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                      >
-                        <p className={`text-lg font-mono font-bold ${isFullResult ? 'text-destructive' : 'text-success'}`}>
-                          {lastResult?.plateNumber}
-                        </p>
-                      </motion.div>
-                    </motion.div>
+                  {/* Car visualization */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <AnimatePresence mode="wait">
+                      {scanPhase === 'idle' && !lastResult && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="text-center"
+                        >
+                          <motion.div
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                          >
+                            <Car className="w-16 h-16 text-muted-foreground/50 mx-auto" />
+                          </motion.div>
+                          <p className="text-xs text-primary mt-2 animate-pulse">Scanning for vehicles...</p>
+                        </motion.div>
+                      )}
+                      
+                      {scanPhase === 'detecting' && (
+                        <motion.div
+                          initial={{ x: -100, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          className="text-center"
+                        >
+                          <motion.div
+                            animate={{ scale: [1, 1.1, 1] }}
+                            transition={{ repeat: Infinity, duration: 0.5 }}
+                          >
+                            <Car className="w-20 h-20 text-primary mx-auto" />
+                          </motion.div>
+                          <p className="text-sm text-primary mt-2 font-semibold">Vehicle Detected!</p>
+                        </motion.div>
+                      )}
+                      
+                      {scanPhase === 'reading' && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="text-center"
+                        >
+                          <Car className="w-20 h-20 text-primary mx-auto" />
+                          {/* Scanning line effect */}
+                          <motion.div
+                            className="absolute left-1/4 right-1/4 h-1 bg-primary/80"
+                            animate={{ top: ['40%', '60%', '40%'] }}
+                            transition={{ repeat: Infinity, duration: 0.8 }}
+                            style={{ boxShadow: '0 0 20px 5px hsl(var(--primary))' }}
+                          />
+                          <p className="text-sm text-primary mt-2 font-semibold animate-pulse">Reading Plate...</p>
+                        </motion.div>
+                      )}
+                      
+                      {(scanPhase === 'complete' || (scanPhase === 'idle' && lastResult)) && (
+                        <motion.div
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="text-center"
+                        >
+                          <Car className={`w-20 h-20 mx-auto ${isFullResult ? 'text-destructive' : 'text-success'}`} />
+                          {/* Plate display on camera */}
+                          <motion.div 
+                            className={`mt-2 px-4 py-1 rounded border-2 ${isFullResult ? 'border-destructive bg-destructive/20' : 'border-success bg-success/20'}`}
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                          >
+                            <p className={`text-lg font-mono font-bold ${isFullResult ? 'text-destructive' : 'text-success'}`}>
+                              {lastResult?.plateNumber}
+                            </p>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  
+                  {/* Scan frame overlay */}
+                  {isScanning && (
+                    <motion.div 
+                      className="absolute inset-8 border-2 border-primary rounded-lg"
+                      animate={{ opacity: [0.3, 1, 0.3] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                    />
                   )}
-                </AnimatePresence>
+                </div>
+              </>
+            ) : (
+              <div className="text-center">
+                <PowerOff className="w-16 h-16 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Camera Off</p>
+                <p className="text-xs text-muted-foreground/70">Click below to start scanning</p>
               </div>
-              
-              {/* Scan frame overlay */}
-              {isScanning && (
-                <motion.div 
-                  className="absolute inset-8 border-2 border-primary rounded-lg"
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                />
-              )}
-            </div>
+            )}
           </div>
 
           {/* Gate Status Indicator */}
@@ -201,20 +265,19 @@ export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus, onSc
           />
 
           <Button 
-            onClick={handleScan} 
-            disabled={isScanning}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={toggleCamera} 
+            className={`w-full ${cameraOn ? 'bg-destructive hover:bg-destructive/90' : 'bg-success hover:bg-success/90'} text-white`}
             size="lg"
           >
-            {isScanning ? (
+            {cameraOn ? (
               <>
-                <ScanLine className="w-5 h-5 mr-2 animate-pulse" />
-                Scanning Vehicle...
+                <PowerOff className="w-5 h-5 mr-2" />
+                Turn OFF Camera
               </>
             ) : (
               <>
-                <Camera className="w-5 h-5 mr-2" />
-                Scan Vehicle (ANPR)
+                <Power className="w-5 h-5 mr-2" />
+                Turn ON Camera (Auto Scan)
               </>
             )}
           </Button>
@@ -279,18 +342,19 @@ export function ANPRPanel({ onSimulateANPR, lastResult, isFull, gateStatus, onSc
               <div className="text-center py-4">
                 <Camera className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">
-                  Click "Scan Vehicle" to detect incoming car
+                  {cameraOn ? 'Waiting for vehicle detection...' : 'Turn on camera to start auto-scanning'}
                 </p>
               </div>
             )}
           </div>
 
           <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
-            <p className="font-semibold mb-1">System Info:</p>
+            <p className="font-semibold mb-1">IoT Auto-Scan Mode:</p>
             <ul className="space-y-1">
-              <li>• AI-powered license plate recognition</li>
-              <li>• Automatic gate control based on capacity</li>
-              <li>• Real-time violation detection</li>
+              <li>• Camera scans vehicles automatically every 4 sec</li>
+              <li>• Auto-assigns to available parking slots</li>
+              <li>• Gate opens on successful entry</li>
+              <li>• Shows FULL error when capacity reached</li>
             </ul>
           </div>
         </div>
